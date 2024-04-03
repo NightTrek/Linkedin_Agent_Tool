@@ -6,6 +6,7 @@ from typing import Type, List
 from pydantic.v1 import BaseModel, Field, AnyHttpUrl
 import os
 import json
+
 def DEFAULT_WAIT_TIME():
     return 100000
 
@@ -19,9 +20,6 @@ def login_linkedin(username, password, driver, bypassCookie=False):
             with open('cookies.json', 'r') as f:
                 cookie_json = json.load(f)
                 for line in cookie_json['cookies']:
-                    print("loading cookie")
-                    print(line)
-                    print("cookie loaded")
                     driver.add_cookie(line)
 
             # Refresh the page to apply the cookies
@@ -87,7 +85,7 @@ def login_linkedin(username, password, driver, bypassCookie=False):
 
 
 
-class search_result(BaseModel):
+class SearchResult(BaseModel):
     first_name: str
     last_name: str
     description: str
@@ -108,58 +106,63 @@ def search_url (firstName: str, lastName: str) -> str:
 
 def extract_results_from_page(search_result_containers):
     search_results_page = []
-    print('extracting results...')
     for search_result in search_result_containers:
-        first_name = search_result.find_element(By.CSS_SELECTOR, "span.entity-result__title-text").text.splite(' ')[0]
-        last_name = search_result.find_element(By.CSS_SELECTOR, "span.entity-result__title-text").text.split(' ')[1]
-        description = search_result.find_element(By.CSS_SELECTOR, "div.entity-result__primary-subtitle").text
-        location = search_result.find_element(By.CSS_SELECTOR, "div.entity-result__secondary-subtitle").text
-        profile_link = search_result.find_element(By.CSS_SELECTOR, "a.app-aware-link").get_attribute("href")
-        print("result extracted from page", first_name, last_name, description, location, profile_link)
-        search_results_page.append(search_result(
-        first_name=first_name,
-        last_name=last_name,
-        description=description,
-        location=location,
-        profile_link=profile_link))
-    print('final extraction: ', search_results_page)
+        try:
+            first_name = search_result.find_element(By.CSS_SELECTOR, "span.entity-result__title-text > a > span:nth-child(1)").text.split(' ')[0]
+            last_name = search_result.find_element(By.CSS_SELECTOR, "span.entity-result__title-text > a > span:nth-child(1)").text.split(' ')[1]
+            description = search_result.find_element(By.CSS_SELECTOR, "div.entity-result__primary-subtitle").text
+            location = search_result.find_element(By.CSS_SELECTOR, "div.entity-result__secondary-subtitle").text
+            profile_link = search_result.find_element(By.CSS_SELECTOR, "a.app-aware-link").get_attribute("href")
+            search_results_page.append(SearchResult(
+            first_name=first_name,
+            last_name=last_name,
+            description=description,
+            location=location,
+            profile_link=profile_link))
+        except Exception as e:
+            print(f"Error extracting data from search result container: {e}")
+            pass
+
     return search_results_page
 
-def get_search_results(url: str, driver, num_pages=5) -> list[list[search_result]]:
-    # Initialize the webdriver (Firefox)
-    
-
-    print("fetching URL: ", url)
+def get_search_results(url: str, driver, num_pages=1) -> list[list[SearchResult]]:
     # Navigate to the LinkedIn search results page
     driver.get(url)
-    print('waiting for results to load')
     # Wait for the search results to load
     wait = WebDriverWait(driver, DEFAULT_WAIT_TIME())
     search_results_container = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "search-results-container")))
-    print('first page loaded')
     results_pages = []
     # Extract the data for each search result
     search_result_containers = search_results_container.find_elements(By.CSS_SELECTOR, "li.reusable-search__result-container") # page 1
     results_pages.append(extract_results_from_page(search_result_containers))
 
-    print("first page extracted")
-    # Navigate to the next N number of pages
-    # Navigate to the next N number of pages
-    next_page_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "button.artdeco-pagination__button--next")))
-    current_page = 1
-    print('finished extraction')
+    print(f"first page extracted, {len(results_pages)} pages, {len(results_pages[0])} results")
 
-    while current_page < num_pages:
-        # Check if there is a next page
-        if next_page_button.is_enabled():
-            next_page_button.click()
-            search_result_containers = search_results_container.find_elements(By.CSS_SELECTOR, "li.reusable-search__result-container")
-            results_pages.append(extract_results_from_page(search_result_containers))
-            next_page_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "button.artdeco-pagination__button--next")))
-            current_page += 1
-        else:
-            break
+    # Navigate to the next N number of pages
+    # current_page = 1
+    
 
+    # print('do we go to the next page? ' + current_page + '/' + num_pages)
+    # while current_page < num_pages:
+    #     # Check if there is a next page
+    #     print('going to next page', current_page)
+    #     try:
+    #         next_page_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "button.artdeco-pagination__button--next")))
+
+    #         if next_page_button.is_enabled():
+    #             next_page_button.click()
+    #             current_page += 1
+    #             search_result_containers = search_results_container.find_elements(By.CSS_SELECTOR, "li.reusable-search__result-container")
+    #             print('extracting page: ' + current_page)
+    #             results_pages.append(extract_results_from_page(search_result_containers))
+    #             print("pages extracted: " + len(results_pages))
+    #             next_page_button = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "button.artdeco-pagination__button--next")))
+
+    #         else:
+    #             break
+    #     except Exception as e:
+    #         print(f"Error extracting from or switching pages: {e}")
+    #         pass
     # return results pages
     return results_pages
 
