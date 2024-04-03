@@ -1,0 +1,6 @@
+init.py 
+__pycache__
+**/__pycache__ 
+.env
+.DS_Store
+cookies.json
