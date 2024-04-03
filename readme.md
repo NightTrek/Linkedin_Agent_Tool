@@ -46,6 +46,17 @@ To use the Linkedin Agent Tool, follow these steps:
 
 2. Create an instance of the `LinkedinAccountSearch` and `LinkedinAccountDetailsTool` classes, passing the Selenium WebDriver as a parameter:
    ```python
+   # activate web driver
+   driver = webdriver.Chrome()
+
+   # automatic login and cookie handling 
+   login_linkedin(
+      username=os.environ["LINKEDIN_USERNAME"],
+      password=os.environ["LINKEDIN_PASSWORD"],
+      driver=driver,
+      bypassCookie=False)
+
+   # setup the agent tools using the authenticated driver
    account_search = LinkedinAccountSearch(selenium_webdriver=driver)
    account_details_scraper = LinkedinAccountDetailsTool(selenium_webdriver=driver)
    ```
