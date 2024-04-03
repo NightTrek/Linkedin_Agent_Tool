@@ -4,3 +4,4 @@ __pycache__
 .env
 .DS_Store
 cookies.json
+linkedin_agent-env
