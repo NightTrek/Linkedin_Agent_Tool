@@ -7,6 +7,7 @@ import os
 
 # activate web driver
 driver = webdriver.Chrome()
+print(os.environ)
 
 username =  os.environ["LINKEDIN_USERNAME"]
 password =  os.environ["LINKEDIN_PASSWORD"]
@@ -45,9 +46,9 @@ find_all_john_smiths = Task(
 )
 
 search_for_daniel_task = Task(
-    description="Search for Daniel Steigman web3 software engineer on Linkedin and get his account details",
-    expected_output="A json containing Daniel Steigman's Linkedin profile details",
-    output_file="./test_output/daniel_details.json",
+    description="Get the profile details for this account: https://www.linkedin.com/in/huobenson/ using the detail scraping tool and return the results",
+    expected_output="A json containing Benson Huo's Linkedin profile details",
+    output_file="./test_output/Benson Huo.json",
     agent=LinkedinSearch_agent
 )
 

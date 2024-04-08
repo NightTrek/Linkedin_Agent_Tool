@@ -201,6 +201,8 @@ def extract_text_and_attributes(element: WebElement) -> str:
     text_content = ' '.join(text_content.split())
 
     return text_content
+
+# ============================
 # Account details tool
 
 class LinkedinActivity(BaseModel):
@@ -210,94 +212,8 @@ class LinkedinActivity(BaseModel):
     reactions_count: str
     comments_count: str
 
-class LinkedinExperience(BaseModel):
-    job_title: str
-    company_name: str
-    employment_type: str
-    start_date: str
-    end_date: str
-    location: Optional[str]
-    achievements: Optional[str]
-    product_links: list[str]
 
-class ExtractedExperience(BaseModel):
-    results: list[LinkedinExperience]
-
-
-class LinkedinEducation(BaseModel):
-    school_name: str
-    degree: str
-    grade: str
-    activities_and_societies: Optional[str]
-    achievements: Optional[str]
-    project_link: AnyHttpUrl | None
-
-
-class ExtractedEducation(BaseModel):
-    results: list[LinkedinEducation]
-
-
-class LinkedinAccountDetails(BaseModel):
-    fullName: str
-    tagline: str
-    aboutSectionTxt: str
-    followers: str
-    activity: List[LinkedinActivity]
-    experience: List[LinkedinExperience]
-    education: List[LinkedinEducation]
-
-
-    def to_json_str(self):
-        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
-
-
-def get_linkedin_profile_title(wait: WebDriverWait) -> dict:
-    """
-    Extracts the title of the LinkedIn profile page
-    :param profile_container: The profile container element
-    :return: The title of the LinkedIn profile page
-    """
-    titleInfo = {}
-    
-    try:
-        profile_container = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "scaffold-layout__main")))
-
-        titleContainerElement = profile_container.find_elements(By.CSS_SELECTOR, '.ph5.pb5')[0]
-        try:
-            titleInfo["firstName"] = titleContainerElement.find_element(By.TAG_NAME, 'h1').text.split(' ')[0].strip()
-            titleInfo["lastName"] = titleContainerElement.find_element(By.TAG_NAME, 'h1').text.split(' ')[1].strip()
-        except (NoSuchElementException, IndexError):
-            titleInfo["firstName"] = "Not Found"
-            titleInfo["lastName"] = "Not Found"
-
-        titleInfo["alt_text"] = titleContainerElement.find_element(By.CSS_SELECTOR, '.text-body-medium.break-words').text.strip()
-
-        titleInfo['location'] = titleContainerElement.find_element(By.CSS_SELECTOR, '.text-body-small.inline.t-black--light.break-words').text.strip() if titleContainerElement.find_elements(By.CSS_SELECTOR, '.text-body-small.inline.t-black--light.break-words') else 'Not Found'
-        return titleInfo
-    except Exception as e:
-        print(f"Error extracting LinkedIn profile title: {e}")
-
-
-## TODO make sure this works for Linkedin profiles that do NOT have an about section
-def get_linkedin_about_section(wait: WebDriverWait) -> str:
-    """
-    Extracts the about section of the LinkedIn profile page
-    :param WebDriverWait: The driver wait Object
-    :return: The about section of the LinkedIn profile page
-    """
-    try:
-        about_ID = wait.until(EC.presence_of_element_located((By.ID, 'about')))
-        about_section_container = about_ID.find_element(By.XPATH, '..') # fetch the parent element
-        about_text_container = about_section_container.find_elements(By.XPATH, './/span[@aria-hidden="true"]')[1]
-
-        about_text = about_text_container.text.strip()
-    except TimeoutException:
-        return "Selector ERROR: Timeout waiting for elements"
-    except NoSuchElementException:
-        return "Selector ERROR: No such element found"
-    return about_text
-
-def get_linkedin_activity_section(wait: WebDriverWait) -> List[LinkedinActivity]:
+def get_linkedin_activity_section(wait: WebDriverWait):
     """
     Extracts the activity section of the LinkedIn profile page
     :param WebDriverWait: The driver wait Object
@@ -309,8 +225,7 @@ def get_linkedin_activity_section(wait: WebDriverWait) -> List[LinkedinActivity]
         activity_section_container = activity_ID.find_element(By.XPATH, '..')  # fetch the parent element
         followers = activity_section_container.find_elements(By.XPATH, './/span[@aria-hidden="true"]')[0].text.strip().split(' ')[0]
         activity_parts = activity_section_container.find_elements(By.CSS_SELECTOR, '.profile-creator-shared-feed-update__mini-container')
-        print(f"followers: {followers}")
-        print(f"activity parts: {len(activity_parts)}")
+
         for activity_part in activity_parts:
             title = ''
             description = ''
@@ -356,15 +271,31 @@ def get_linkedin_activity_section(wait: WebDriverWait) -> List[LinkedinActivity]
                 print("ERROR")
                 pass
                 # print(activity_part.get_attribute("innerHTML"))
-        return activity
+        return {
+            "followers": followers,
+            "activity": activity
+        }
     except TimeoutException:
         print("Selector ERROR: Timeout waiting for elements")
         return []
 
 
 
+class LinkedinExperience(BaseModel):
+    job_title: str
+    company_name: str
+    employment_type: str
+    start_date: str
+    end_date: str
+    location: Optional[str]
+    achievements: Optional[str]
+    product_links: list[str]
 
-def get_linkedin_experient_section(wait: WebDriverWait) -> List[LinkedinExperience]:
+class ExtractedExperience(BaseModel):
+    results: list[LinkedinExperience]
+
+
+async def get_linkedin_experient_section(wait: WebDriverWait) -> List[LinkedinExperience]:
     """
     Extracts the experience section of the LinkedIn profile page
     :param WebDriverWait: The driver wait Object
@@ -374,7 +305,7 @@ def get_linkedin_experient_section(wait: WebDriverWait) -> List[LinkedinExperien
         experience_ID = wait.until(EC.presence_of_element_located((By.ID, 'experience')))
         experience_section = experience_ID.find_element(By.XPATH, '..') # section parent
         stringToExtract = extract_text_and_attributes(experience_section)
-        extracted_output = extract_data_from_html_str(
+        extracted_output = await extract_data_from_html_str(
             html=stringToExtract,
             pydantic_model=ExtractedExperience,
         )
@@ -385,7 +316,19 @@ def get_linkedin_experient_section(wait: WebDriverWait) -> List[LinkedinExperien
         return []
 
 
-def get_linkedin_education_section(wait: WebDriverWait) -> List[LinkedinEducation]:
+class LinkedinEducation(BaseModel):
+    school_name: str
+    degree: str
+    grade: Optional[str]
+    activities_and_societies: Optional[str]
+    achievements: Optional[str]
+    project_link: Optional[str]
+
+class ExtractedEducation(BaseModel):
+    results: list[LinkedinEducation]
+
+
+async def get_linkedin_education_section(wait: WebDriverWait) -> List[LinkedinEducation]:
     """
     Extracts the education section of the LinkedIn profile page
     :param WebDriverWait: The driver wait Object
@@ -395,7 +338,7 @@ def get_linkedin_education_section(wait: WebDriverWait) -> List[LinkedinEducatio
         education_ID = wait.until(EC.presence_of_element_located((By.ID, 'education')))
         education_section = education_ID.find_element(By.XPATH, '..') # section parent
         stringToExtract = extract_text_and_attributes(education_section)
-        extracted_output = extract_data_from_html_str(
+        extracted_output = await extract_data_from_html_str(
             html=stringToExtract,
             pydantic_model=ExtractedEducation,
         )
@@ -404,7 +347,68 @@ def get_linkedin_education_section(wait: WebDriverWait) -> List[LinkedinEducatio
         print(f"Error extracting education section: {e}")
         return []
 
-def get_account_details(driver, profile_url: str) -> LinkedinAccountDetails:
+
+class LinkedinAccountDetails(BaseModel):
+    fullName: str
+    tagline: str
+    aboutSectionTxt: str
+    followers: str
+    activity: List[LinkedinActivity]
+    experience: ExtractedExperience
+    education: ExtractedEducation
+
+
+    def to_json_str(self):
+        return json.dumps(self, default=lambda o: o.__dict__, sort_keys=True, indent=4)
+
+
+def get_linkedin_profile_title(wait: WebDriverWait) -> dict:
+    """
+    Extracts the title of the LinkedIn profile page
+    :param profile_container: The profile container element
+    :return: The title of the LinkedIn profile page
+    """
+    titleInfo = {}
+    
+    try:
+        profile_container = wait.until(EC.presence_of_element_located((By.CLASS_NAME, "scaffold-layout__main")))
+
+        titleContainerElement = profile_container.find_elements(By.CSS_SELECTOR, '.ph5.pb5')[0]
+        try:
+            titleInfo["fullName"] = titleContainerElement.find_element(By.TAG_NAME, 'h1').text.strip()
+        except (NoSuchElementException, IndexError):
+            titleInfo["fullName"] = "Not Found"
+
+        titleInfo["alt_text"] = titleContainerElement.find_element(By.CSS_SELECTOR, '.text-body-medium.break-words').text.strip()
+
+        titleInfo['location'] = titleContainerElement.find_element(By.CSS_SELECTOR, '.text-body-small.inline.t-black--light.break-words').text.strip() if titleContainerElement.find_elements(By.CSS_SELECTOR, '.text-body-small.inline.t-black--light.break-words') else 'Not Found'
+        return titleInfo
+    except Exception as e:
+        print(f"Error extracting LinkedIn profile title: {e}")
+
+
+## TODO make sure this works for Linkedin profiles that do NOT have an about section
+def get_linkedin_about_section(wait: WebDriverWait) -> str:
+    """
+    Extracts the about section of the LinkedIn profile page
+    :param WebDriverWait: The driver wait Object
+    :return: The about section of the LinkedIn profile page
+    """
+    try:
+        about_ID = wait.until(EC.presence_of_element_located((By.ID, 'about')))
+        about_section_container = about_ID.find_element(By.XPATH, '..') # fetch the parent element
+        about_text_container = about_section_container.find_elements(By.XPATH, './/span[@aria-hidden="true"]')[1]
+
+        about_text = about_text_container.text.strip()
+    except TimeoutException:
+        return "Selector ERROR: Timeout waiting for elements"
+    except NoSuchElementException:
+        return "Selector ERROR: No such element found"
+    return about_text
+
+
+
+async def get_account_details(driver, profile_url: str) -> LinkedinAccountDetails:
         # Navigate to the LinkedIn profile page
         driver.get(profile_url)
 
@@ -413,16 +417,23 @@ def get_account_details(driver, profile_url: str) -> LinkedinAccountDetails:
         try:
 
             # Extract the account details using the LinkedinAccountDetails class
-            # titleInfo = get_linkedin_profile_title(wait)
-            # print("title info fetched: ", titleInfo)
+            titleInfo = get_linkedin_profile_title(wait)
 
-            # aboutSectionTxt = get_linkedin_about_section(wait)
-            # print("ABOUT SECTION TXT: ", aboutSectionTxt)
-
-            # activity = get_linkedin_activity_section(wait)
+            aboutSectionTxt = get_linkedin_about_section(wait)
+            activity = get_linkedin_activity_section(wait)
             
-            experience = get_linkedin_experient_section(wait)
-            print("EXPERIENCE SECTION OUTPUT: ", experience)
+            experience = await get_linkedin_experient_section(wait)
+            education =  await get_linkedin_education_section(wait)
+
+            return LinkedinAccountDetails(
+                fullName=titleInfo["fullName"],
+                tagline=titleInfo["alt_text"],
+                followers=activity["followers"],
+                aboutSectionTxt=aboutSectionTxt,
+                activity=activity["activity"],
+                experience=experience,
+                education=education
+            )
 
         except Exception as e:
             print(f"Error extract Linkedin Account details: {e}")
