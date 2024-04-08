@@ -23,10 +23,5 @@ login_linkedin(username=username, password=password, driver=driver, bypassCookie
 profile_url = "https://www.linkedin.com/in/albertski/"
 
 
-
-async def extract():
-    response = await get_account_details(profile_url=profile_url, driver=driver)
-    print(response.model_dump_json(indent=2))
-
-if __name__ == "__main__":
-    asyncio.run(extract())
+response =  get_account_details(profile_url=profile_url, driver=driver)
+print(response.model_dump_json(indent=2))

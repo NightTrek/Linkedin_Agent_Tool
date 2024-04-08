@@ -1,4 +1,4 @@
-from selenium import webdriver
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.remote.webelement import WebElement
@@ -295,7 +295,7 @@ class ExtractedExperience(BaseModel):
     results: list[LinkedinExperience]
 
 
-async def get_linkedin_experient_section(wait: WebDriverWait) -> List[LinkedinExperience]:
+def get_linkedin_experient_section(wait: WebDriverWait) -> List[LinkedinExperience]:
     """
     Extracts the experience section of the LinkedIn profile page
     :param WebDriverWait: The driver wait Object
@@ -305,7 +305,7 @@ async def get_linkedin_experient_section(wait: WebDriverWait) -> List[LinkedinEx
         experience_ID = wait.until(EC.presence_of_element_located((By.ID, 'experience')))
         experience_section = experience_ID.find_element(By.XPATH, '..') # section parent
         stringToExtract = extract_text_and_attributes(experience_section)
-        extracted_output = await extract_data_from_html_str(
+        extracted_output = extract_data_from_html_str(
             html=stringToExtract,
             pydantic_model=ExtractedExperience,
         )
@@ -328,7 +328,7 @@ class ExtractedEducation(BaseModel):
     results: list[LinkedinEducation]
 
 
-async def get_linkedin_education_section(wait: WebDriverWait) -> List[LinkedinEducation]:
+def get_linkedin_education_section(wait: WebDriverWait) -> List[LinkedinEducation]:
     """
     Extracts the education section of the LinkedIn profile page
     :param WebDriverWait: The driver wait Object
@@ -338,7 +338,7 @@ async def get_linkedin_education_section(wait: WebDriverWait) -> List[LinkedinEd
         education_ID = wait.until(EC.presence_of_element_located((By.ID, 'education')))
         education_section = education_ID.find_element(By.XPATH, '..') # section parent
         stringToExtract = extract_text_and_attributes(education_section)
-        extracted_output = await extract_data_from_html_str(
+        extracted_output = extract_data_from_html_str(
             html=stringToExtract,
             pydantic_model=ExtractedEducation,
         )
@@ -354,8 +354,8 @@ class LinkedinAccountDetails(BaseModel):
     aboutSectionTxt: str
     followers: str
     activity: List[LinkedinActivity]
-    experience: ExtractedExperience
-    education: ExtractedEducation
+    experience: ExtractedExperience | None
+    education: ExtractedEducation | None
 
 
     def to_json_str(self):
@@ -408,23 +408,32 @@ def get_linkedin_about_section(wait: WebDriverWait) -> str:
 
 
 
-async def get_account_details(driver, profile_url: str) -> LinkedinAccountDetails:
+def get_account_details(driver, profile_url: str) -> LinkedinAccountDetails:
         # Navigate to the LinkedIn profile page
         driver.get(profile_url)
 
         # Wait for the profile page to load
         wait = WebDriverWait(driver, DEFAULT_WAIT_TIME())
         try:
-
             # Extract the account details using the LinkedinAccountDetails class
             titleInfo = get_linkedin_profile_title(wait)
-
             aboutSectionTxt = get_linkedin_about_section(wait)
             activity = get_linkedin_activity_section(wait)
             
-            experience = await get_linkedin_experient_section(wait)
-            education =  await get_linkedin_education_section(wait)
-
+            experience = None
+            education = None
+            with ThreadPoolExecutor() as executor:
+                future_experience = executor.submit(get_linkedin_experient_section, wait)
+                future_education =  executor.submit(get_linkedin_education_section, wait)
+                try:
+                    experience = future_experience.result()
+                except Exception as e:
+                    print(f"Error extracting LinkedIn experience section: {e}")
+                try:
+                    education = future_education.result()
+                except Exception as e:
+                    print(f"Error extracting LinkedIn education section: {e}")
+                    
             return LinkedinAccountDetails(
                 fullName=titleInfo["fullName"],
                 tagline=titleInfo["alt_text"],
@@ -436,6 +445,4 @@ async def get_account_details(driver, profile_url: str) -> LinkedinAccountDetail
             )
 
         except Exception as e:
-            print(f"Error extract Linkedin Account details: {e}")
-            
-        
+            print(f"Error extracting LinkedIn account details: {e}")

@@ -1,9 +1,9 @@
 from typing import Type
-from openai import AsyncOpenAI
+from openai import OpenAI
 from pydantic import BaseModel
 import json
 
-async def extract_data_from_html_str(
+def extract_data_from_html_str(
         html: str,
         pydantic_model: Type[BaseModel],
         base_url: str = "https://openrouter.ai/api/v1",
@@ -11,12 +11,12 @@ async def extract_data_from_html_str(
 
 ):
  
-    client = AsyncOpenAI(
+    client = OpenAI(
         base_url=base_url
     )
 
 
-    response = await client.chat.completions.create(
+    response = client.chat.completions.create(
         model=model_name,
         response_format={ "type": "json_object" },
         messages=[
